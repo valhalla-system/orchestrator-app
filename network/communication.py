@@ -10,4 +10,5 @@ class Server(host, port, name, access_password, version):
 
     @app.route("/client/register")
     def register_new_client_to_database(self):
+
         # TODO: implement
