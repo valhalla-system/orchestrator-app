@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from utils.models.models import Client, VMImage
+from utils.exceptions.DatabaseException import DatabaseException
 import logging
 
 
@@ -71,3 +72,33 @@ class Database:
                 f"Error getting list of clients with VM installed: {ex}")
             result = []
         return result
+
+    def add_client(self, client: Client):
+        try:
+            with self.session.begin():
+                self.session.add(client)
+                self.session.flush()
+                self.session.commit()
+        except Exception as ex:
+            self.logger.error(f"Error adding entity to database: {ex}")
+            raise DatabaseException("Error adding entity to database")
+
+    def modify_client(self, client: Client) -> Client:
+        try:
+            old_object = self.get_client_by_mac_address(client.mac_address)
+            with self.session.begin():
+                old_object = client
+                self.session.merge(old_object)
+                self.session.flush()
+                self.session.commit()
+                return old_object
+        except Exception as ex:
+            self.logger.error(f"Error modifying object in the database: {ex}")
+            raise DatabaseException("Error modifying entity in database")
+
+    def delete_client(self, client: Client):
+        try:
+            with self.session.begin():
+                self.session.delete(client)
+        except Exception as ex:
+            self.logger.error(f"Error deleting client from database: {ex}")
