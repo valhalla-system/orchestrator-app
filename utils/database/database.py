@@ -102,3 +102,31 @@ class Database:
                 self.session.delete(client)
         except Exception as ex:
             self.logger.error(f"Error deleting client from database: {ex}")
+
+    def get_image_by_id(self, image_id: int) -> VMImage:
+        try:
+            with self.session.begin():
+                response = self.session.query(
+                    VMImage, image_id=image_id).first()
+                return response
+        except Exception as ex:
+            self.logger.error(f"Error getting image data from database: {ex}")
+
+    def get_images(self) -> list[VMImage]:
+        try:
+            with self.session.begin():
+                response = self.session.query(VMImage).all()
+                return response
+        except Exception as ex:
+            self.logger.error(
+                f"Error getting list of images from database: {ex}")
+
+    def get_image_by_name(self, image_name: str) -> list[VMImage]:
+        try:
+            with self.session.begin():
+                response = self.session.query(
+                    VMImage, image_name=image_name).all()
+                return response
+        except Exception as ex:
+            self.logger.error(
+                f"Error getting list of images from database: {ex}")
