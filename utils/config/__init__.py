@@ -1,1 +1,1 @@
-from utils.config import ServerConfig
+from . import config

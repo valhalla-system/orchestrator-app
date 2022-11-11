@@ -1,1 +1,1 @@
-from DatabaseException import DatabaseException
+from . import DatabaseException

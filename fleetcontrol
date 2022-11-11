@@ -1,5 +1,12 @@
 #!/usr/bin/python3
 
-import flask
+from network.communication import Server
+from utils.config.config import ServerConfig
+
+config = ServerConfig()
+server = Server(host=config.server_host, port=config.server_port, name=config.server_name, access_password=config.server_password,
+                access_username=config.server_access_username, version="v0.0.1alpha", database_file_path=config.database_file, logging_level=config.server_loglevel)
+
+server.run()
 
 # vi: ft=python

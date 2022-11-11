@@ -24,11 +24,12 @@ class FlaskAppWrapper(object):
 
 class Server():
 
-    def __init__(self, host: str, port: int, name: str, access_password: str, version: str, database_file_path: str, logging_level: str):
+    def __init__(self, host: str, port: int, name: str, access_password: str, access_username: str, version: str, database_file_path: str, logging_level: str, ):
         self.host = host
         self.port = port
         self.name = name
         self.access_password = access_password
+        self.access_username = access_username
         self.version = version
         self.database = Database(
             database_file=database_file_path, logging_level=logging_level)
