@@ -130,3 +130,36 @@ class Database:
         except Exception as ex:
             self.logger.error(
                 f"Error getting list of images from database: {ex}")
+
+    def get_image_by_hash(self, image_hash: str) -> list[VMImage]:
+        try:
+            with self.session.begin():
+                response = self.session.query(VMImage, image_hash=image_hash)
+                return response
+        except Exception as ex:
+            self.logger.error(
+                f"Error getting list of images with specified hash: {ex}")
+
+    def add_image(self, image: VMImage):
+        try:
+            with self.session.begin():
+                self.session.add(image)
+                self.session.flush()
+                self.session.commit()
+        except Exception as ex:
+            self.logger.error(f"Couldn't save client data do database: {ex}")
+            raise DatabaseException(f"Couldn't add image to database: {ex}")
+
+    def modify_image(self, new_image_object: VMImage) -> VMImage:
+        try:
+            old_object = self.get_image_by_id(new_image_object.image_id)
+            with self.session.begin():
+                old_object = new_image_object
+                self.session.merge(old_object)
+                self.session.flush()
+                self.session.commit()
+                return old_object
+        except Exception as ex:
+            self.logger.error(f"Couldn't modify object in database: {ex}")
+            raise DatabaseException(
+                f"Couldn't modify object in database: {ex}")
