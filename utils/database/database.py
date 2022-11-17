@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from utils.models.models import Client, VMImage
+from sqlalchemy.ext.declarative import declarative_base
+from utils.models.models import Client, VMImage, User
 from utils.exceptions.DatabaseException import DatabaseException
 import logging
 
@@ -163,3 +164,29 @@ class Database:
             self.logger.error(f"Couldn't modify object in database: {ex}")
             raise DatabaseException(
                 f"Couldn't modify object in database: {ex}")
+
+    def add_user(self, new_user: User):
+        try:
+            with self.session.begin():
+                self.session.add(new_user)
+                self.session.flush()
+                self.session.merge()
+        except Exception as ex:
+            self.logger.error(f"Couldn't add user to the database: {ex}")
+            raise DatabaseException(f"Couldn't add user to the database: {ex}")
+
+    def get_user_by_id(self, user_id: int) -> User:
+        try:
+            with self.session.begin():
+                return self.session.query(User).filter(User.user_id == user_id).first()
+        except Exception as ex:
+            self.logger.error(f"Error getting data from database: {ex}")
+            raise DatabaseException(f"Error getting data from database: {ex}")
+
+    def get_user_by_name(self, username: str) -> User:
+        try:
+            with self.session.begin():
+                return self.session.query(User).filter(User.username == username).first()
+        except Exception as ex:
+            self.logger.error(f"Error getting data from database: {ex}")
+            raise DatabaseException(f"Error getting data from database: {ex}")

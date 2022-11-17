@@ -1,8 +1,13 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.orm import relationship, backref
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from utils.config.config import ServerConfig
 
-Base = declarative_base()
+config = ServerConfig()
+engine = create_engine(f"sqlite:///{config.database_file}")
+Base = declarative_base(bind=engine)
+Base.metadata.create_all()
 
 client_image_table = Table(
     "client_image",
@@ -19,9 +24,8 @@ class Client(Base):
     hostname = Column(String(100), nullable=False)
     client_version = Column(String(100), nullable=False)
     vm_list_on_machine = relationship(
-        "VMImages",
+        "VMImage",
         secondary=client_image_table,
-        back_populates="vm_images"
     )
 
     def has_vm_installed(self, vm_object):
@@ -37,16 +41,15 @@ class VMImage(Base):
     image_name = Column(String(100), unique=True, nullable=False)
     image_file = Column(String(500), unique=False, nullable=False)
     image_version = Column(String(100), nullable=False)
-    image_hash = Column(String(500), nullalbe=False)
+    image_hash = Column(String(500), nullable=False)
     clients = relationship(
-        "Clients",
-        secondary=client_image_table,
-        back_populates="clients"
+        "Client",
+        secondary=client_image_table
     )
 
 
 class User(Base):
     __tablename__ = "users"
-    user_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String)
     password_hash = Column(String)

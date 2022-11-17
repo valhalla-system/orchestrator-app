@@ -18,6 +18,7 @@ class ServerConfig:
         server_port_override = os.environ.get("VALHALLA_SERVER_PORT")
         server_host_override = os.environ.get("VALHALLA_SERVER_HOST")
         server_password_override = os.environ.get("VALHALLA_SERVER_PASSWORD")
+        jwt_secret_override = os.environ.get("VALHALLA_JWT_SECRET")
         server_access_username_override = os.environ.get(
             "VALHALLA_SERVER_ACCESS_USERNAME")
         database_file_override = os.environ.get("VALHALLA_DATABASE_FILE")
@@ -38,6 +39,9 @@ class ServerConfig:
         if server_password_override:
             config["server_password"] = server_password_override
 
+        if jwt_secret_override:
+            config["jwt_secret"] = jwt_secret_override
+
         if server_access_username_override:
             config["server_access_username"] = server_access_username_override
 
@@ -49,5 +53,6 @@ class ServerConfig:
         self.database_file = config["database_file"]
         self.server_host = config["server_host"]
         self.server_password = config["server_password"]
+        self.jwt_secret = config["jwt_secret"]
         self.server_access_username = config["server_access_username"]
         self.server_loglevel = config["server_loglevel"]
