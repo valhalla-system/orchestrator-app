@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from utils.models.models import Client, VMImage, User
+from utils.models.models import Client, VMImage, User, Base
 from utils.exceptions.DatabaseException import DatabaseException
 import logging
 
@@ -11,9 +11,11 @@ class Database:
         try:
             # Connect to the database using SQLAlchemy
             engine = create_engine(f"sqlite:///{database_file}")
-            Session = sessionmaker()
-            Session.configure(bind=engine)
-            self.session = Session()
+            self.Session = sessionmaker()
+            self.Session.configure(bind=engine, expire_on_commit=False)
+            self.base = Base
+            self.base.metadata.create_all(bind=engine)
+            # session = self.Session()
             # create logger using data from config file
             self.logger = logging.getLogger(__name__)
             log_level_mapping_dict = {
@@ -32,8 +34,9 @@ class Database:
     def get_clients(self) -> list[Client]:
         result = []
         try:
-            with self.session.begin():
-                result = self.session.query(Client).all()
+            session = self.Session()
+            with session.begin():
+                result = session.query(Client).all()
         except Exception as ex:
             self.logger.error(
                 f"Error getting list of clients from database: {ex}")
@@ -42,9 +45,10 @@ class Database:
 
     def get_client_by_mac_address(self, mac_address: str) -> Client:
         result = None
+        session = self.Session()
         try:
-            with self.session.begin():
-                result = self.session.query(
+            with session.begin():
+                result = session.query(
                     Client, mac_address=mac_address).first()
         except Exception as ex:
             self.logger.warn(f"Error getting client by mac address: {ex}")
@@ -53,8 +57,9 @@ class Database:
     def get_clients_by_client_version(self, client_version: str) -> list[Client]:
         result = []
         try:
-            with self.session.begin():
-                result = self.session.query(
+            session = self.Session()
+            with session.begin():
+                result = session.query(
                     Client, client_version=client_version).all()
         except Exception as ex:
             self.logger.warn(
@@ -76,10 +81,11 @@ class Database:
 
     def add_client(self, client: Client):
         try:
-            with self.session.begin():
-                self.session.add(client)
-                self.session.flush()
-                self.session.commit()
+            session = self.Session()
+            with session.begin():
+                session.add(client)
+                session.flush()
+                session.commit()
         except Exception as ex:
             self.logger.error(f"Error adding entity to database: {ex}")
             raise DatabaseException("Error adding entity to database")
@@ -87,11 +93,12 @@ class Database:
     def modify_client(self, client: Client) -> Client:
         try:
             old_object = self.get_client_by_mac_address(client.mac_address)
-            with self.session.begin():
+            session = self.Session()
+            with session.begin():
                 old_object = client
-                self.session.merge(old_object)
-                self.session.flush()
-                self.session.commit()
+                session.merge(old_object)
+                session.flush()
+                session.commit()
                 return old_object
         except Exception as ex:
             self.logger.error(f"Error modifying object in the database: {ex}")
@@ -99,15 +106,17 @@ class Database:
 
     def delete_client(self, client: Client):
         try:
-            with self.session.begin():
-                self.session.delete(client)
+            session = self.Session()
+            with session.begin():
+                session.delete(client)
         except Exception as ex:
             self.logger.error(f"Error deleting client from database: {ex}")
 
     def get_image_by_id(self, image_id: int) -> VMImage:
         try:
-            with self.session.begin():
-                response = self.session.query(
+            session = self.Session()
+            with session.begin():
+                response = session.query(
                     VMImage, image_id=image_id).first()
                 return response
         except Exception as ex:
@@ -115,8 +124,9 @@ class Database:
 
     def get_images(self) -> list[VMImage]:
         try:
-            with self.session.begin():
-                response = self.session.query(VMImage).all()
+            session = self.Session()
+            with session.begin():
+                response = session.query(VMImage).all()
                 return response
         except Exception as ex:
             self.logger.error(
@@ -124,8 +134,9 @@ class Database:
 
     def get_image_by_name(self, image_name: str) -> list[VMImage]:
         try:
-            with self.session.begin():
-                response = self.session.query(
+            session = self.Session()
+            with session.begin():
+                response = session.query(
                     VMImage, image_name=image_name).all()
                 return response
         except Exception as ex:
@@ -134,8 +145,9 @@ class Database:
 
     def get_image_by_hash(self, image_hash: str) -> list[VMImage]:
         try:
-            with self.session.begin():
-                response = self.session.query(VMImage, image_hash=image_hash)
+            session = self.Session()
+            with session.begin():
+                response = session.query(VMImage, image_hash=image_hash)
                 return response
         except Exception as ex:
             self.logger.error(
@@ -143,10 +155,11 @@ class Database:
 
     def add_image(self, image: VMImage):
         try:
-            with self.session.begin():
-                self.session.add(image)
-                self.session.flush()
-                self.session.commit()
+            session = self.Session()
+            with session.begin():
+                session.add(image)
+                session.flush()
+                session.commit()
         except Exception as ex:
             self.logger.error(f"Couldn't save client data do database: {ex}")
             raise DatabaseException(f"Couldn't add image to database: {ex}")
@@ -154,11 +167,12 @@ class Database:
     def modify_image(self, new_image_object: VMImage) -> VMImage:
         try:
             old_object = self.get_image_by_id(new_image_object.image_id)
-            with self.session.begin():
+            session = self.Session()
+            with session.begin():
                 old_object = new_image_object
-                self.session.merge(old_object)
-                self.session.flush()
-                self.session.commit()
+                session.merge(old_object)
+                session.flush()
+                session.commit()
                 return old_object
         except Exception as ex:
             self.logger.error(f"Couldn't modify object in database: {ex}")
@@ -167,26 +181,33 @@ class Database:
 
     def add_user(self, new_user: User):
         try:
-            with self.session.begin():
-                self.session.add(new_user)
-                self.session.flush()
-                self.session.merge()
+            session = self.Session()
+            with session.begin():
+                session.add(new_user)
+                session.flush()
+                session.commit()
         except Exception as ex:
             self.logger.error(f"Couldn't add user to the database: {ex}")
             raise DatabaseException(f"Couldn't add user to the database: {ex}")
 
     def get_user_by_id(self, user_id: int) -> User:
         try:
-            with self.session.begin():
-                return self.session.query(User).filter(User.user_id == user_id).first()
+            session = self.Session()
+            with session.begin():
+                user = session.query(User).filter(
+                    User.user_id == user_id).first()
+                return user
         except Exception as ex:
             self.logger.error(f"Error getting data from database: {ex}")
             raise DatabaseException(f"Error getting data from database: {ex}")
 
     def get_user_by_name(self, username: str) -> User:
         try:
-            with self.session.begin():
-                return self.session.query(User).filter(User.username == username).first()
+            session = self.Session()
+            with session.begin():
+                user = session.query(User).filter(
+                    User.username == username).first()
+                return user
         except Exception as ex:
             self.logger.error(f"Error getting data from database: {ex}")
             raise DatabaseException(f"Error getting data from database: {ex}")

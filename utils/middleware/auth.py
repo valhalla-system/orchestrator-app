@@ -4,6 +4,7 @@ from flask import request, abort
 from flask import current_app
 from utils.models.models import User
 from utils.database.database import Database
+from utils.config.config import ServerConfig
 
 # Inspired by: https://blog.loginradius.com/engineering/guest-post/securing-flask-api-with-jwt/ [access: 16.11.2022, 18:33 CET]
 
@@ -21,10 +22,11 @@ def require_auth(f):
                 "error": "Unauthorized"
             }, 401
         try:
+            config = ServerConfig()
             database = Database(
-                database_file=current_app.config["DATABASE_FILE"], logging_level=current_app.config["LOGGING_LEVEL"])
+                database_file=config.database_file, logging_level=config.server_loglevel)
             user_data_from_request = jwt.decode(
-                token, current_app.config["SECRET_KEY"], algorithms=["HS256"])
+                token, config.jwt_secret, algorithms=["HS256"])
             request_user = database.get_user_by_name(
                 username=user_data_from_request["username"])
             if request_user is None:

@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 from network.communication import Server
 from utils.config.config import ServerConfig
 

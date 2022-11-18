@@ -1,13 +1,8 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, Table
 from sqlalchemy.orm import relationship, backref
-from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from utils.config.config import ServerConfig
 
-config = ServerConfig()
-engine = create_engine(f"sqlite:///{config.database_file}")
-Base = declarative_base(bind=engine)
-Base.metadata.create_all()
+Base = declarative_base()
 
 client_image_table = Table(
     "client_image",
@@ -34,18 +29,25 @@ class Client(Base):
                 return True
         return False
 
+    def as_dict(self):
+        return {c.name: str(getattr(self, c.name)) for c in self.__table__.columns}
+
 
 class VMImage(Base):
     __tablename__ = "vm_images"
     image_id = Column(Integer, primary_key=True)
-    image_name = Column(String(100), unique=True, nullable=False)
+    image_name = Column(String(100), unique=False, nullable=False)
     image_file = Column(String(500), unique=False, nullable=False)
     image_version = Column(String(100), nullable=False)
     image_hash = Column(String(500), nullable=False)
+    image_name_version_combo = Column(String(600), nullable=False, unique=True)
     clients = relationship(
         "Client",
         secondary=client_image_table
     )
+
+    def as_dict(self):
+        return {c.name: str(getattr(self, c.name)) for c in self.__table__.columns}
 
 
 class User(Base):
@@ -53,3 +55,6 @@ class User(Base):
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String)
     password_hash = Column(String)
+
+    def as_dict(self):
+        return {c.name: str(getattr(self, c.name)) for c in self.__table__.columns}

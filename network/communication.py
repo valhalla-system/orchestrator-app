@@ -69,21 +69,26 @@ class Server():
             temporary_salt = bcrypt.gensalt()
             hashed_request_password = bcrypt.hashpw(
                 password=request_data["password"].encode("utf-8"), salt=temporary_salt)
-            if current_user.password_hash != hashed_request_password:
+            print(
+                f"Password: {request_data['password']}, password hash from database: {current_user.password_hash}")
+            # if current_user.password_hash != hashed_request_password:
+            if not bcrypt.checkpw(request_data["password"].encode("utf-8"), current_user.password_hash):
                 return {
                     "message": "Invalid login data",
                     "data": None,
                     "error": "Auth error"
                 }, 401
             try:
-                current_user["token"] = jwt.encode({
-                    "username": current_user["username"]
+                new_token = jwt.encode({
+                    "username": current_user.username
                 },
                     self.flask_app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
-                current_user.pop("password")
-                return current_user, 202
+                user_dictionary = current_user.as_dict()
+                user_dictionary.pop("password_hash")
+                user_dictionary["token"] = new_token
+                return user_dictionary, 202
             except Exception as ex:
                 return {
                     "message": "Error loging in",
@@ -98,13 +103,11 @@ class Server():
             }, 500
 
     @require_auth
-    def register_new_client_to_database(self, request_user):
+    def register_new_client_to_database(request_user, self):
         request_content_type = request.headers.get('Content-Type')
-        json_string = ""
         if request_content_type == 'application/json':
-            json_string = request.json
+            json_object = request.json
             try:
-                json_object = json.loads(json_string)
                 new_client_object = Client(mac_address=json_object["mac_address"], ip_address=json_object["ip_address"], hostname=json_object[
                                            "hostname"], client_version=json_object["client_version"], vm_list_on_machine=json_object["vm_list_on_machine"])
                 self.database.add_client(new_client_object)
@@ -112,7 +115,38 @@ class Server():
                 response.status_code = 201
                 return response
             except Exception as ex:
-                response = jsonify(success=False)
+                response = jsonify({
+                    "message": "Internal server error",
+                    "data": None,
+                    "error": str(ex)
+                })
+                response.status_code = 400
+                return response
+
+    @require_auth
+    def add_image_to_database(request_user, self):
+        request_content_type = request.headers.get('Content-Type')
+        if request_content_type == 'application/json':
+            json_object = request.json
+            try:
+                new_image_object = VMImage(
+                    image_name=json_object["image_name"],
+                    image_file=json_object["image_file"],
+                    image_version=json_object["image_version"],
+                    image_hash=json_object["image_hash"],
+                    image_name_version_combo=f"{json_object['image_name']}@{json_object['image_version']}",
+                    clients=[]
+                )
+                self.database.add_client(new_image_object)
+                response = jsonify(success=True)
+                response.status_code = 201
+                return response
+            except Exception as ex:
+                response = jsonify({
+                    "message": "Internal server error",
+                    "data": None,
+                    "error": str(ex)
+                })
                 response.status_code = 400
                 return response
 
@@ -128,7 +162,11 @@ class Server():
         self.database.add_user(admin_user)
         self.app.add_endpoint(endpoint="/", endpoint_name="server_data",
                               handler=self.basic_server_data, methods=["GET"])
+        self.app.add_endpoint(
+            endpoint="/login", endpoint_name="login", handler=self.login, methods=["POST"])
         self.app.add_endpoint(endpoint="/clients", endpoint_name="register_client",
                               handler=self.register_new_client_to_database, methods=["POST"])
+        self.app.add_endpoint(endpoint="/images", endpoint_name="add_image",
+                              handler=self.add_image_to_database, methods=["POST"])
         # TODO: add rest of endpoints
         self.app.run()
