@@ -21,6 +21,7 @@ class Client(Base):
     vm_list_on_machine = relationship(
         "VMImage",
         secondary=client_image_table,
+        back_populates="clients"
     )
 
     def has_vm_installed(self, vm_object):
@@ -43,7 +44,8 @@ class VMImage(Base):
     image_name_version_combo = Column(String(600), nullable=False, unique=True)
     clients = relationship(
         "Client",
-        secondary=client_image_table
+        secondary=client_image_table,
+        back_populates="vm_list_on_machine"
     )
 
     def as_dict(self):

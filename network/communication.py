@@ -150,6 +150,21 @@ class Server():
                 response.status_code = 400
                 return response
 
+    def update_client_data(request_user, self):
+        request_content_type = request.headers.get('Content-Type')
+        if request_content_type == 'application/json':
+            json_object = request.json
+            try:
+                pass
+            except Exception as ex:
+                response = jsonify({
+                    "message": "Internal server error",
+                    "data": None,
+                    "error": str(ex)
+                })
+                response.status_code = 400
+                return response
+
     def run(self):
         # add admin user to dataabse (or update existing one)
         salt = bcrypt.gensalt()
