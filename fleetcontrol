@@ -1,11 +1,110 @@
 #!/usr/bin/python3
 from network.communication import Server
+from utils.database.database import Database
 from utils.config.config import ServerConfig
+from utils.models.models import VMImage
+from utils.tools.tools import md5
+import logging
+import argparse
+
 
 config = ServerConfig()
-server = Server(host=config.server_host, port=config.server_port, name=config.server_name, access_password=config.server_password,
-                access_username=config.server_access_username, jwt_secret=config.jwt_secret, version="v0.0.1alpha", database_file_path=config.database_file, logging_level=config.server_loglevel)
+logger = logging.getLogger(__name__)
+log_level_mapping_dict = {
+    "NOTSET": 0,
+    "DEBUG": 10,
+    "INFO": 20,
+    "WARNING": 30,
+    "ERROR": 40,
+    "CRITICAL": 50,
+}
+logger.setLevel(log_level_mapping_dict[config.server_loglevel])
+logger = logging.getLogger()
+logger.setLevel
 
-server.run()
+
+def run_server():
+    server = Server(
+        host=config.server_host,
+        port=config.server_port,
+        name=config.server_name,
+        access_password=config.server_password,
+        access_username=config.server_access_username,
+        jwt_secret=config.jwt_secret,
+        version="v0.0.1alpha",
+        database_file_path=config.database_file,
+        logging_level=config.server_loglevel,
+    )
+    logger.info(
+        f"Running server on host: {config.server_host}, port: {config.server_port}, server name: {config.server_name}"
+    )
+
+    server.run()
+
+
+def add_image(image_name: str, image_file: str, image_version: str):
+    try:
+        new_image_hash = md5(image_file)
+        new_image_object = VMImage(
+            image_name=image_name,
+            image_file=image_file,
+            image_version=image_version,
+            image_hash=new_image_hash,
+            image_name_version_combo=f"{image_name}@{image_version}",
+        )
+        db = Database(config.database_file, config.server_loglevel)
+        db.add_image(new_image_object)
+    except Exception as ex:
+        logger.error(f"Error adding image to the database: {str(ex)}")
+        exit(-1)
+
+
+def assign_image(image_name: str, image_version: str, client_mac_address: str):
+    try:
+        db = Database(config.database_file, config.server_loglevel)
+        db.assign_image_to_client(client_mac_address=client_mac_address, image_name_version_combo=f"{image_name}@{image_version}")
+    except Exception as ex:
+        logger.error(f"Error assigning image to a client: {str(ex)}")
+
+
+parser = argparse.ArgumentParser(
+    prog="fleetcontrol",
+    description="Server and configuration utility for orchestrating VM machine clients",
+)
+
+function_mapper = {
+    "run": run_server,
+    "add_image": add_image,
+    "assign_image": assign_image,
+}
+
+parser.add_argument("command", choices=function_mapper)
+
+parser.add_argument("--image-name", action="store")
+parser.add_argument("--image-filepath", action="store")
+parser.add_argument("--image-version", action="store")
+parser.add_argument("--mac-address", action="store")
+
+args = parser.parse_args()
+
+fun = function_mapper[args.command]
+
+if "add_image" == args.command:
+    fun(
+        image_name=args.image_name,
+        image_file=args.image_filepath,
+        image_version=args.image_version,
+    )
+elif "assign_image" == args.command:
+    fun(
+        image_name=args.image_name,
+        image_version=args.image_version,
+        client_mac_address=args.mac_address,
+    )
+elif "run" == args.command:
+    fun()
+else:
+    logger.error(f"Invalid operand: {args.command}")
+    exit(-1)
 
 # vi: ft=python

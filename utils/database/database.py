@@ -49,7 +49,7 @@ class Database:
         try:
             with session.begin():
                 result = session.query(
-                    Client, mac_address=mac_address).first()
+                    Client).filter(Client.mac_address==mac_address).first()
         except Exception as ex:
             self.logger.warn(f"Error getting client by mac address: {ex}")
         return result
@@ -142,6 +142,17 @@ class Database:
         except Exception as ex:
             self.logger.error(
                 f"Error getting list of images from database: {ex}")
+    
+    def get_image_by_name_version_string(self, image_name_version_string: str) -> list[VMImage]:
+        try:
+            session = self.Session()
+            with session.begin():
+                response = session.query(
+                    VMImage).filter(VMImage.image_name_version_combo==image_name_version_string).first()
+                return response
+        except Exception as ex:
+            self.logger.error(
+                f"Error getting list of images from database: {ex}")
 
     def get_image_by_hash(self, image_hash: str) -> list[VMImage]:
         try:
@@ -178,6 +189,20 @@ class Database:
             self.logger.error(f"Couldn't modify object in database: {ex}")
             raise DatabaseException(
                 f"Couldn't modify object in database: {ex}")
+
+    def assign_image_to_client(self, client_mac_address: str, image_name_version_combo: str):
+        try:
+            session = self.Session()
+            with session.begin():
+                client = session.query(Client).filter(Client.mac_address==client_mac_address).first()
+                image = session.query(VMImage).filter(VMImage.image_name_version_combo==image_name_version_combo).first()
+                client.vm_list_on_machine.append(image)
+                session.merge(client)
+                session.flush()
+                session.commit()
+        except Exception as ex:
+            self.logger.error(f"Couldn't add image to client list: {str(ex)}")
+            raise DatabaseException(f"Couldn't add image to client list: {str(ex)}")
 
     def add_user(self, new_user: User):
         try:
