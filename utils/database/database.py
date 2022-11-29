@@ -24,7 +24,7 @@ class Database:
                 "INFO": 20,
                 "WARNING": 30,
                 "ERROR": 40,
-                "CRITICAL": 50
+                "CRITICAL": 50,
             }
             self.logger.setLevel(log_level_mapping_dict[logging_level])
         except Exception as ex:
@@ -38,18 +38,39 @@ class Database:
             with session.begin():
                 result = session.query(Client).all()
         except Exception as ex:
-            self.logger.error(
-                f"Error getting list of clients from database: {ex}")
+            self.logger.error(f"Error getting list of clients from database: {ex}")
             result = []
         return result
 
     def get_client_by_mac_address(self, mac_address: str) -> Client:
         result = None
         session = self.Session()
+        session.expire_on_commit = False
         try:
             with session.begin():
-                result = session.query(
-                    Client).filter(Client.mac_address==mac_address).first()
+                result = (
+                    session.query(Client)
+                    .filter(Client.mac_address == mac_address)
+                    .first()
+                )
+        except Exception as ex:
+            self.logger.warn(f"Error getting client by mac address: {ex}")
+        return result
+    
+    def get_client_vm_list_by_mac_address(self, mac_address: str):
+        result = None
+        session = self.Session()
+        session.expire_on_commit = False
+        try:
+            with session.begin():
+                client = (
+                    session.query(Client)
+                    .filter(Client.mac_address == mac_address)
+                    .first()
+                )
+                result = []
+                for vm in client.vm_list_on_machine:
+                    result.append(vm.image_id)
         except Exception as ex:
             self.logger.warn(f"Error getting client by mac address: {ex}")
         return result
@@ -59,11 +80,9 @@ class Database:
         try:
             session = self.Session()
             with session.begin():
-                result = session.query(
-                    Client, client_version=client_version).all()
+                result = session.query(Client, client_version=client_version).all()
         except Exception as ex:
-            self.logger.warn(
-                f"Error getting client list by software version: {ex}")
+            self.logger.warn(f"Error getting client list by software version: {ex}")
         return result
 
     def get_clients_by_vm_image(self, vm_image: VMImage) -> list[Client]:
@@ -74,8 +93,7 @@ class Database:
                 if client.has_vm_installed(vm_image.image_hash):
                     result.append()
         except Exception as ex:
-            self.logger.warn(
-                f"Error getting list of clients with VM installed: {ex}")
+            self.logger.warn(f"Error getting list of clients with VM installed: {ex}")
             result = []
         return result
 
@@ -92,10 +110,12 @@ class Database:
 
     def modify_client(self, client: Client) -> Client:
         try:
-            old_object = self.get_client_by_mac_address(client.mac_address)
             session = self.Session()
             with session.begin():
-                old_object = client
+                old_object: Client = session.query(Client).filter(Client.mac_address==client.mac_address).first()
+                old_object.ip_address = client.ip_address
+                old_object.hostname = client.hostname
+                old_object.client_version = client.client_version
                 session.merge(old_object)
                 session.flush()
                 session.commit()
@@ -116,8 +136,9 @@ class Database:
         try:
             session = self.Session()
             with session.begin():
-                response = session.query(
-                    VMImage, image_id=image_id).first()
+                response = (
+                    session.query(VMImage).filter(VMImage.image_id == image_id).first()
+                )
                 return response
         except Exception as ex:
             self.logger.error(f"Error getting image data from database: {ex}")
@@ -129,40 +150,50 @@ class Database:
                 response = session.query(VMImage).all()
                 return response
         except Exception as ex:
-            self.logger.error(
-                f"Error getting list of images from database: {ex}")
+            self.logger.error(f"Error getting list of images from database: {ex}")
 
     def get_image_by_name(self, image_name: str) -> list[VMImage]:
         try:
             session = self.Session()
             with session.begin():
-                response = session.query(
-                    VMImage, image_name=image_name).all()
+                response = (
+                    session.query(VMImage)
+                    .filter(VMImage.image_name == image_name)
+                    .all()
+                )
                 return response
         except Exception as ex:
-            self.logger.error(
-                f"Error getting list of images from database: {ex}")
-    
-    def get_image_by_name_version_string(self, image_name_version_string: str) -> list[VMImage]:
+            self.logger.error(f"Error getting list of images from database: {ex}")
+
+    def get_image_by_name_version_string(
+        self, image_name_version_string: str
+    ) -> list[VMImage]:
         try:
             session = self.Session()
             with session.begin():
-                response = session.query(
-                    VMImage).filter(VMImage.image_name_version_combo==image_name_version_string).first()
+                response = (
+                    session.query(VMImage)
+                    .filter(
+                        VMImage.image_name_version_combo == image_name_version_string
+                    )
+                    .first()
+                )
                 return response
         except Exception as ex:
-            self.logger.error(
-                f"Error getting list of images from database: {ex}")
+            self.logger.error(f"Error getting list of images from database: {ex}")
 
     def get_image_by_hash(self, image_hash: str) -> list[VMImage]:
         try:
             session = self.Session()
             with session.begin():
-                response = session.query(VMImage, image_hash=image_hash)
+                response = (
+                    session.query(VMImage)
+                    .filter(VMImage.image_hash == image_hash)
+                    .first()
+                )
                 return response
         except Exception as ex:
-            self.logger.error(
-                f"Error getting list of images with specified hash: {ex}")
+            self.logger.error(f"Error getting list of images with specified hash: {ex}")
 
     def add_image(self, image: VMImage):
         try:
@@ -187,15 +218,41 @@ class Database:
                 return old_object
         except Exception as ex:
             self.logger.error(f"Couldn't modify object in database: {ex}")
-            raise DatabaseException(
-                f"Couldn't modify object in database: {ex}")
+            raise DatabaseException(f"Couldn't modify object in database: {ex}")
 
-    def assign_image_to_client(self, client_mac_address: str, image_name_version_combo: str):
+    def delete_image(self, image_to_delete: VMImage):
         try:
             session = self.Session()
             with session.begin():
-                client = session.query(Client).filter(Client.mac_address==client_mac_address).first()
-                image = session.query(VMImage).filter(VMImage.image_name_version_combo==image_name_version_combo).first()
+                session.delete(image_to_delete)
+                session.flush()
+                session.commit()
+        except Exception as ex:
+            self.logger.error(
+                f"Error deleting image with id={image_to_delete.image_id}: {str(ex)}"
+            )
+            raise DatabaseException(
+                f"Error deleting image with id={image_to_delete.image_id}: {str(ex)}"
+            )
+
+    def assign_image_to_client(
+        self, client_mac_address: str, image_name_version_combo: str
+    ):
+        try:
+            session = self.Session()
+            with session.begin():
+                client = (
+                    session.query(Client)
+                    .filter(Client.mac_address == client_mac_address)
+                    .first()
+                )
+                image = (
+                    session.query(VMImage)
+                    .filter(
+                        VMImage.image_name_version_combo == image_name_version_combo
+                    )
+                    .first()
+                )
                 client.vm_list_on_machine.append(image)
                 session.merge(client)
                 session.flush()
@@ -203,6 +260,34 @@ class Database:
         except Exception as ex:
             self.logger.error(f"Couldn't add image to client list: {str(ex)}")
             raise DatabaseException(f"Couldn't add image to client list: {str(ex)}")
+
+    def detach_image_from_client(
+        self, client_mac_address: str, image_name_version_combo: str
+    ):
+        try:
+            session = self.Session()
+            with session.begin():
+                client = (
+                    session.query(Client)
+                    .filter(Client.mac_address == client_mac_address)
+                    .first()
+                )
+                image = (
+                    session.query(VMImage)
+                    .filter(
+                        VMImage.image_name_version_combo == image_name_version_combo
+                    )
+                    .first()
+                )
+                client.vm_list_on_machine.remove(image)
+                session.merge(client)
+                session.flush()
+                session.commit()
+        except Exception as ex:
+            self.logger.error(f"Couldn't remove image from client list: {str(ex)}")
+            raise DatabaseException(
+                f"Couldn't remove image from client list: {str(ex)}"
+            )
 
     def add_user(self, new_user: User):
         try:
@@ -219,8 +304,7 @@ class Database:
         try:
             session = self.Session()
             with session.begin():
-                user = session.query(User).filter(
-                    User.user_id == user_id).first()
+                user = session.query(User).filter(User.user_id == user_id).first()
                 return user
         except Exception as ex:
             self.logger.error(f"Error getting data from database: {ex}")
@@ -230,8 +314,7 @@ class Database:
         try:
             session = self.Session()
             with session.begin():
-                user = session.query(User).filter(
-                    User.username == username).first()
+                user = session.query(User).filter(User.username == username).first()
                 return user
         except Exception as ex:
             self.logger.error(f"Error getting data from database: {ex}")

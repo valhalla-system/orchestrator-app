@@ -143,19 +143,43 @@ class Server():
                 return response
             except Exception as ex:
                 response = jsonify({
-                    "message": "Internal server error",
+                    "message": "Bad input",
                     "data": None,
                     "error": str(ex)
                 })
                 response.status_code = 400
                 return response
 
+    @require_auth
     def update_client_data(request_user, self):
         request_content_type = request.headers.get('Content-Type')
         if request_content_type == 'application/json':
             json_object = request.json
             try:
-                pass
+                old_client: Client = self.database.get_client_by_mac_address(json_object["mac_address"])
+                if old_client == None:
+                    response = jsonify({
+                        "message": "client not found",
+                        "data": None,
+                        "error": None
+                    })
+                    response.status_code = 404
+                    return response
+                new_client: Client = Client(
+                    mac_address=json_object["mac_address"],
+                    ip_address=json_object["ip_address"],
+                    hostname=json_object["hostname"],
+                    client_version=json_object["client_version"],
+                    vm_list_on_machine=[]
+                )
+                self.database.modify_client(new_client)
+                response = jsonify({
+                    "message": "Data updated",
+                    "data": None,
+                    "error": None
+                })
+                response.status_code = 201
+                return response
             except Exception as ex:
                 response = jsonify({
                     "message": "Internal server error",
@@ -164,6 +188,35 @@ class Server():
                 })
                 response.status_code = 400
                 return response
+    
+    @require_auth
+    def get_client_data(request_user, self, client_mac_address):
+        try:
+            client_data = self.database.get_client_by_mac_address(client_mac_address)
+            return jsonify(client_data.as_dict())
+        except Exception as ex:
+            response = jsonify({
+                "message": "Internal server error",
+                "data": None,
+                "error": str(ex)
+            })
+            response.status_code = 500
+            return response
+    
+    @require_auth
+    def get_client_list_of_vms(request_user, self, client_mac_address):
+        try:
+            vm_ids_list = self.database.get_client_vm_list_by_mac_address(client_mac_address)
+            return jsonify(vm_ids_list)
+        except Exception as ex:
+            response = jsonify({
+                "message": "Internal server error",
+                "data": None,
+                "error": str(ex)
+            })
+            response.status_code = 500
+            return response
+
 
     def run(self):
         # add admin user to dataabse (or update existing one)
@@ -183,5 +236,8 @@ class Server():
                               handler=self.register_new_client_to_database, methods=["POST"])
         self.app.add_endpoint(endpoint="/images", endpoint_name="add_image",
                               handler=self.add_image_to_database, methods=["POST"])
+        self.app.add_endpoint(endpoint="/clients", endpoint_name="update_client", handler=self.update_client_data, methods=["PUT"])
+        self.app.add_endpoint(endpoint="/clients/<client_mac_address>", endpoint_name="get_client_data", handler=self.get_client_data, methods=["GET"])
+        self.app.add_endpoint(endpoint="/clients/<client_mac_address>/vms", endpoint_name="get_client_vms_list", handler=self.get_client_list_of_vms, methods=["GET"])
         # TODO: add rest of endpoints
         self.app.run()
