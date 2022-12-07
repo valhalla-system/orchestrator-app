@@ -1,5 +1,5 @@
 from http.client import NON_AUTHORITATIVE_INFORMATION
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file, make_response
 from utils.database.database import Database
 from utils.exceptions import DatabaseException
 from utils.models.models import Client, VMImage, User
@@ -7,6 +7,7 @@ from utils.middleware.auth import require_auth
 import json
 import bcrypt
 import jwt
+import base64
 
 
 class FlaskAppWrapper(object):
@@ -178,7 +179,7 @@ class Server():
                     "data": None,
                     "error": None
                 })
-                response.status_code = 201
+                response.status_code = 202
                 return response
             except Exception as ex:
                 response = jsonify({
@@ -193,6 +194,14 @@ class Server():
     def get_client_data(request_user, self, client_mac_address):
         try:
             client_data = self.database.get_client_by_mac_address(client_mac_address)
+            if client_data == None:    
+                response = jsonify({
+                    "message": "Client not found in database",
+                    "data": None,
+                    "error": None
+                })
+                response.status_code = 404
+                return response
             return jsonify(client_data.as_dict())
         except Exception as ex:
             response = jsonify({
@@ -216,10 +225,39 @@ class Server():
             })
             response.status_code = 500
             return response
-
+    
+    @require_auth
+    def get_vm_data(request_user, self, vm_id):
+        try:
+            vm_image: VMImage = self.database.get_image_by_id(vm_id)
+            return jsonify(vm_image.as_dict())
+        except Exception as ex:
+            response = jsonify({
+                "message": "Internal server error",
+                "data": None,
+                "error": str(ex)
+            })
+            response.status_code = 500
+            return response
+    
+    @require_auth
+    def serve_vm_image(request_user, self, vm_id):
+        try:
+            image_data = self.database.get_image_by_id(vm_id)
+            with open(image_data.image_file, "rb") as image_file:
+                data = image_file.read()
+                response = make_response(data)
+                response.headers.set('Content-Type', 'application/octet-stream')
+                return response
+        except Exception as ex:
+            response = jsonify({
+                "error": str(ex)
+            })
+            response.status_code = 500
+            return response
 
     def run(self):
-        # add admin user to dataabse (or update existing one)
+        # add admin user to database (or update existing one)
         salt = bcrypt.gensalt()
         temp_password_hash = bcrypt.hashpw(
             self.access_password.encode("utf-8"), salt)
@@ -236,6 +274,10 @@ class Server():
                               handler=self.register_new_client_to_database, methods=["POST"])
         self.app.add_endpoint(endpoint="/images", endpoint_name="add_image",
                               handler=self.add_image_to_database, methods=["POST"])
+        self.app.add_endpoint(endpoint="/images/<vm_id>", endpoint_name="get_vm_data",
+                              handler=self.get_vm_data, methods=["GET"])
+        self.app.add_endpoint(endpoint="/images/<vm_id>/download", endpoint_name="download_vm",
+                              handler=self.serve_vm_image, methods=["GET"])
         self.app.add_endpoint(endpoint="/clients", endpoint_name="update_client", handler=self.update_client_data, methods=["PUT"])
         self.app.add_endpoint(endpoint="/clients/<client_mac_address>", endpoint_name="get_client_data", handler=self.get_client_data, methods=["GET"])
         self.app.add_endpoint(endpoint="/clients/<client_mac_address>/vms", endpoint_name="get_client_vms_list", handler=self.get_client_list_of_vms, methods=["GET"])
