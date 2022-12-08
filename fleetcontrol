@@ -6,6 +6,7 @@ from utils.models.models import VMImage
 from utils.tools.tools import md5
 import logging
 import argparse
+from prettytable import PrettyTable
 
 
 config = ServerConfig()
@@ -82,6 +83,30 @@ def detach_image(image_name: str, image_version: str, client_mac_address: str):
     except Exception as ex:
         logger.error(f"Error detaching image from the client {client_mac_address}; error was {str(ex)}")
 
+def print_image_list():
+    try:
+        db = Database(config.database_file, config.server_loglevel)
+        image_list = db.get_images()
+        table = PrettyTable()
+        table.field_names = ["Id", "Name", "Version", "File location", "Hash"]
+        for image in image_list:
+            table.add_row([image.image_id, image.image_name, image.image_version, image.image_file, image.image_hash])
+        print(table)
+    except Exception as ex:
+        logger.error(f"{str(ex)}")
+
+def print_client_list():
+    try:
+        db = Database(config.database_file, config.server_loglevel)
+        client_list = db.get_clients()
+        table = PrettyTable()
+        table.field_names = ["MAC address", "IP address", "Hostname", "Version"]
+        for client in client_list:
+            table.add_row([client.mac_address, client.ip_address, client.hostname, client.client_version])
+        print(table)
+    except Exception as ex:
+        logger.error(f"{str(ex)}")
+
 
 parser = argparse.ArgumentParser(
     prog="fleetcontrol",
@@ -93,7 +118,9 @@ function_mapper = {
     "add_image": add_image,
     "remove_image": remove_image,
     "assign_image": assign_image,
-    "detach_image": detach_image
+    "detach_image": detach_image,
+    "print_images": print_image_list,
+    "print_clients": print_client_list,
 }
 
 parser.add_argument("command", choices=function_mapper)
@@ -131,6 +158,10 @@ elif "detach_image" == args.command:
         client_mac_address=args.mac_address,
     )
 elif "run" == args.command:
+    fun()
+elif "print_images" == args.command:
+    fun()
+elif "print_clients" == args.command:
     fun()
 else:
     logger.error(f"Invalid operand: {args.command}")
